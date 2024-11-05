@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Canva Presentation Analyzer
 
-## Getting Started
+A powerful web application that captures, extracts, and analyzes Canva presentations using AI. Built with Next.js, Playwright, and Claude AI.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- 📸 Captures full-resolution screenshots of Canva presentations
+- 📝 Extracts text content from presentation slides using GPT-4 (cheaper vision than anthropic)
+- 🤖 Provides comprehensive presentation analysis using Claude AI (openai doesn't do PDF vision. Gemini does, but I just like claude better)
+- 🎯 Generates executive summaries, key themes, and insights
+- ⚡ Processes multiple slides in parallel for faster results
+
+## Prerequisites
+
+Before you begin, ensure you have:
+
+- Node.js 18+ installed
+- A BrowserBase account and API key
+- OpenAI API key
+- Anthropic (Claude) API key
+
+## Environment Setup
+
+Create a `.env` file in the root directory with:
+
+```env
+BROWSERBASE_API_KEY=your_browserbase_key
+BROWSERBASE_PROJECT_ID=your_project_id
+OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_key
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Installation
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+# Clone the repository
+git clone [your-repo-url]
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+# Install dependencies
+npm install
 
-## Learn More
+# Start the development server
+npm run dev
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Usage
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Navigate to `http://localhost:3000`
+2. Paste a Canva presentation URL into the input field
+3. Click "Process" to capture and extract text from the slides
+4. Click "Analyze with Claude" to generate a comprehensive analysis
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## API Endpoints
 
-## Deploy on Vercel
+- `/api/browse` - Coordinates the capture of all presentation slides
+- `/api/capture-page` - Captures individual slide screenshots
+- `/api/extract` - Extracts text content using GPT-4
+- `/api/analyze-pdf` - Generates presentation analysis using Claude
+- `/api/page-count` - Determines the total number of slides
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Tech Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **Frontend**: Next.js, React, Tailwind CSS
+- **Backend**: Next.js API Routes
+- **Browser Automation**: Playwright
+- **AI Services**: 
+  - OpenAI GPT-4 (text extraction)
+  - Anthropic Claude (presentation analysis)
+- **Infrastructure**: BrowserBase (browser automation service)
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+MIT License
