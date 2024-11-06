@@ -304,9 +304,6 @@ export async function POST(req: Request) {
       try {
         console.log('Processing user message:', body.event.text);
         
-        // Fetch benefits data first
-        const benefitsResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/benefits`);
-        const benefitsData = await benefitsResponse.json();
 
         // Get conversation context
         const messageHistory = await getConversationContext(
@@ -316,7 +313,6 @@ export async function POST(req: Request) {
         );
         console.log('Thread history being sent to chat API:', messageHistory);
 
-        // Make the chat API call with benefits data
         const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/chat`, {
           method: 'POST',
           headers: { 
@@ -331,7 +327,6 @@ export async function POST(req: Request) {
                 content: body.event.text || ''
               }
             ],
-            benefitsData
           })
         });
 
