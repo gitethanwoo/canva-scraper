@@ -339,6 +339,12 @@ export async function POST(req: Request) {
           }
         }
 
+        console.log('Sending to chat API with screenshots:', {
+          messageLength: enhancedMessage.length,
+          numberOfScreenshots: screenshots.length,
+          screenshotSizes: screenshots.map(s => s.length)
+        });
+
         const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/chat`, {
           method: 'POST',
           headers: {
