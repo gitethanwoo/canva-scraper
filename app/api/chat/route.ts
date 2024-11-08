@@ -8,11 +8,13 @@ const RequestSchema = z.object({
     z.object({
       content: z.string(),
       role: z.enum(["user", "assistant", "system"]),
+      images: z.array(z.string()).optional(),
     })
   ),
 });
 
-const SYSTEM_PROMPT = `you are a helpful slack bot. answer questions like a very smart professor.`;
+const SYSTEM_PROMPT = `you are a helpful slack bot. answer questions like a very smart professor. 
+When analyzing screenshots or images, describe what you see and provide relevant insights.`;
 
 export const maxDuration = 60;
 
@@ -23,14 +25,25 @@ export async function POST(req: Request) {
 
     console.log(`Processing chat with ${messages.length} messages`);
 
+    // Prepare messages with image context
+    const enhancedMessages = messages.map(msg => {
+      if (msg.images?.length) {
+        return {
+          ...msg,
+          content: `${msg.content}\n\nImage Analysis: [Processing ${msg.images.length} screenshots attached to this message]`
+        };
+      }
+      return msg;
+    });
+
     const result = await generateText({
       model: openai("gpt-4o-2024-08-06"),
       messages: [
         {
           role: "system",
-          content: `${SYSTEM_PROMPT}`,
+          content: SYSTEM_PROMPT,
         },
-        ...convertToCoreMessages(messages),
+        ...convertToCoreMessages(enhancedMessages),
       ],
     });
 

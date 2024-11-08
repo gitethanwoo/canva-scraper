@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import { verifySlackRequest } from '@/lib/slack-utils';
 import { createClient } from '@supabase/supabase-js';
 import { WebClient } from '@slack/web-api';
+import { extractUrls, isValidUrl } from '@/lib/url-utils';
+import { captureScreenshot } from '@/lib/screenshot-utils';
 
 // Replace Redis initialization with Supabase
 const supabase = createClient(
@@ -36,6 +38,7 @@ interface SlackEventPayload {
 interface MessageHistory {
   role: 'user' | 'assistant';
   content: string;
+  images?: string[]; // Base64 encoded screenshots
 }
 
 interface SlackMention {
@@ -85,9 +88,9 @@ async function getThreadHistory(channel: string, thread_ts: string): Promise<Mes
       limit: 100,
       inclusive: true
     });
-    
+
     console.log('Slack API Response:', result);
-    
+
     if (!result.ok || !result.messages) {
       console.error('Slack API Error:', result.error);
       return [];
@@ -107,26 +110,26 @@ async function getThreadHistory(channel: string, thread_ts: string): Promise<Mes
 }
 
 async function getConversationContext(
-  channel: string, 
+  channel: string,
   thread_ts?: string,
   isAppMention = false
 ): Promise<MessageHistory[]> {
   let context: MessageHistory[] = [];
-  
+
   // If it's an @mention, get channel context first
   if (isAppMention) {
     const channelHistory = await getChannelHistory(channel);
     context = [...channelHistory];
     console.log('Added channel context:', channelHistory.length, 'messages');
   }
-  
+
   // Then get thread context if it exists
   if (thread_ts) {
     const threadHistory = await getThreadHistory(channel, thread_ts);
     context = [...context, ...threadHistory];
     console.log('Added thread context:', threadHistory.length, 'messages');
   }
-  
+
   return context;
 }
 
@@ -166,7 +169,7 @@ async function isThreadActive(channel: string, threadTs: string): Promise<boolea
     .eq('channel_id', channel)
     .gt('expires_at', new Date().toISOString())
     .maybeSingle();
-    
+
   return !!data;
 }
 
@@ -206,7 +209,7 @@ async function shouldRespondToMessage(event: SlackEvent): Promise<boolean> {
   if (isDirectMessage(event)) {
     return true;
   }
-  
+
   // Always respond to @mentions and activate the thread
   if (isAppMention(event)) {
     if (event.thread_ts) {
@@ -216,12 +219,12 @@ async function shouldRespondToMessage(event: SlackEvent): Promise<boolean> {
     }
     return true;
   }
-  
+
   // For thread replies, check if we're active in the thread
   if (isThreadedReply(event)) {
     return await isThreadActive(event.channel!, event.thread_ts!);
   }
-  
+
   return false;
 }
 
@@ -230,7 +233,7 @@ export async function POST(req: Request) {
     const headersList = await headers();
     const timestamp = headersList.get('x-slack-request-timestamp');
     const signature = headersList.get('x-slack-signature');
-    
+
     const rawBody = await req.text();
     const body = JSON.parse(rawBody) as SlackEventPayload;
 
@@ -275,9 +278,9 @@ export async function POST(req: Request) {
       }
 
       // Ignore bot messages, message updates, and verify channel access
-      if (body.event.bot_id || 
-          body.event.subtype || 
-          !body.event.channel) {
+      if (body.event.bot_id ||
+        body.event.subtype ||
+        !body.event.channel) {
         return NextResponse.json({ ok: true });
       }
 
@@ -303,7 +306,7 @@ export async function POST(req: Request) {
 
       try {
         console.log('Processing user message:', body.event.text);
-        
+
 
         // Get conversation context
         const messageHistory = await getConversationContext(
@@ -313,9 +316,32 @@ export async function POST(req: Request) {
         );
         console.log('Thread history being sent to chat API:', messageHistory);
 
+        let enhancedMessage = body.event.text || '';
+        const screenshots: string[] = [];
+
+        // Extract and process URLs
+        const urls = extractUrls(body.event.text || '');
+        if (urls.length > 0) {
+          console.log('Found URLs to process:', urls);
+
+          for (const url of urls) {
+            if (isValidUrl(url)) {
+              try {
+                const screenshot = await captureScreenshot(url);
+                if (screenshot) {
+                  screenshots.push(screenshot);
+                  enhancedMessage += `\n[Screenshot of ${url} processed]`;
+                }
+              } catch (error) {
+                console.error(`Failed to capture screenshot for ${url}:`, error);
+              }
+            }
+          }
+        }
+
         const response = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/chat`, {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'x-slack-request-timestamp': '1'
           },
@@ -324,7 +350,8 @@ export async function POST(req: Request) {
               ...messageHistory,
               {
                 role: 'user',
-                content: body.event.text || ''
+                content: enhancedMessage,
+                images: screenshots
               }
             ],
           })
