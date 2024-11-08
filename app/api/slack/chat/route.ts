@@ -369,21 +369,30 @@ export async function POST(req: Request) {
         }
 
         const data = await response.json();
-        console.log('Chat API response content:', data.content);
+        console.log('Chat API full response:', data);
+        console.log('Attempting to send to Slack:', {
+          channel: body.event.channel!,
+          threadTs: body.event.thread_ts || (isAppMention(body.event) ? body.event.ts : undefined),
+          messageLength: data.content?.length,
+        });
 
         // Send message back to Slack using the WebClient
-        await slack.chat.postMessage({
+        const slackResponse = await slack.chat.postMessage({
           channel: body.event.channel!,
           text: data.content,
-          // If it's an @mention without thread_ts, create a new thread using the original message ts
           thread_ts: body.event.thread_ts || (isAppMention(body.event) ? body.event.ts : undefined),
           mrkdwn: true,
           unfurl_links: false
         });
 
+        console.log('Slack postMessage response:', slackResponse);
+
         return NextResponse.json({ ok: true });
       } catch (error) {
         console.error('Error processing Slack message:', error);
+        if (error instanceof Error) {
+          console.error('Error stack:', error.stack);
+        }
         return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
       }
     }

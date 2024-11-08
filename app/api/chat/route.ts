@@ -24,6 +24,12 @@ export async function POST(req: Request) {
     const { messages } = RequestSchema.parse(body);
 
     console.log(`Processing chat with ${messages.length} messages`);
+    console.log('Messages content:', messages.map(m => ({
+      role: m.role,
+      contentLength: m.content.length,
+      hasImages: !!m.images?.length,
+      imageCount: m.images?.length
+    })));
 
     // Prepare messages with image context
     const enhancedMessages = messages.map(msg => {
@@ -36,6 +42,8 @@ export async function POST(req: Request) {
       return msg;
     });
 
+    console.log('Sending to OpenAI with enhanced messages:', enhancedMessages);
+
     const result = await generateText({
       model: openai("gpt-4o-2024-08-06"),
       messages: [
@@ -47,9 +55,17 @@ export async function POST(req: Request) {
       ],
     });
 
+    console.log('OpenAI response:', {
+      text: result.text?.slice(0, 100) + '...',  // Log first 100 chars
+      fullLength: result.text?.length
+    });
+
     return Response.json({ content: result.text });
   } catch (error) {
     console.error("Chat API error:", error);
+    if (error instanceof Error) {
+      console.error('Error stack:', error.stack);
+    }
     return Response.json(
       { error: "Failed to process chat request" },
       { status: 500 }
