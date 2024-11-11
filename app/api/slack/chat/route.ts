@@ -51,7 +51,7 @@ interface SlackMention {
 }
 
 // Add this function to fetch channel history
-async function getChannelHistory(channel: string, limit = 20): Promise<MessageHistory[]> {
+async function getChannelHistory(channel: string, limit = 200): Promise<MessageHistory[]> {
   try {
     const result = await slack.conversations.history({
       channel,
