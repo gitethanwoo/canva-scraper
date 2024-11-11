@@ -85,7 +85,7 @@ async function getThreadHistory(channel: string, thread_ts: string): Promise<Mes
     const result = await slack.conversations.replies({
       channel,
       ts: thread_ts,
-      limit: 100,
+      limit: 500,
       inclusive: true
     });
 
