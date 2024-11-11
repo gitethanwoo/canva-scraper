@@ -15,6 +15,9 @@ const supabase = createClient(
 // Initialize Slack client 
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
+// Add near the top with other initializations
+const ENABLE_SCREENSHOTS = process.env.ENABLE_SCREENSHOTS === 'true';
+
 interface SlackEvent {
   type: string;
   text?: string;
@@ -321,7 +324,7 @@ export async function POST(req: Request) {
 
         // Extract and process URLs
         const urls = extractUrls(body.event.text || '');
-        if (urls.length > 0) {
+        if (urls.length > 0 && ENABLE_SCREENSHOTS) {
           console.log('Found URLs to process:', urls);
 
           for (const url of urls) {
