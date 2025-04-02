@@ -1,12 +1,5 @@
 import { NextResponse } from 'next/server';
 
-// Updated scopes based on Zoom Marketplace requirements
-const REQUIRED_SCOPES = [
-  'cloud_recording:read:recording',
-  'user:read:email',
-  'user:read:user'
-].join(' ');
-
 // Use our own callback URL
 const REDIRECT_URI = process.env.NODE_ENV === 'production'
   ? 'https://contextprojector.vercel.app/api/zoom/callback'
@@ -22,14 +15,13 @@ export async function GET() {
     // Generate a random state value for CSRF protection
     const state = Math.random().toString(36).substring(7);
     
-    // Use our callback URL
+    // Use marketplace URL
     const response = NextResponse.redirect(
       `https://zoom.us/oauth/authorize?` +
       `response_type=code&` +
       `client_id=${clientId}&` +
       `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
-      `state=${state}&` +
-      `scope=${encodeURIComponent(REQUIRED_SCOPES)}`
+      `state=${state}`
     );
 
     // Set state cookie with HTTP-only flag
