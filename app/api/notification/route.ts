@@ -86,15 +86,15 @@ export async function POST(req: NextRequest) {
     // Handle different event types
     switch (payload.event) {
       case 'recording.transcript_completed':
-        if (!payload.payload.object || !payload.download_token || !payload.payload.object.recording_files) {
-          return NextResponse.json({ error: 'Invalid transcript payload, missing download token, or missing recording files' }, { status: 400 });
+        if (!payload.payload.object || !payload.payload.object.recording_files) {
+          return NextResponse.json({ error: 'Invalid transcript payload or missing recording files' }, { status: 400 });
         }
         await handleTranscriptCompleted({ 
           object: {
             ...payload.payload.object,
             recording_files: payload.payload.object.recording_files
           }
-        }, payload.download_token);
+        });
         break;
         
       default:

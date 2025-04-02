@@ -28,7 +28,14 @@ interface TranscriptPayload {
   };
 }
 
-export async function handleTranscriptCompleted(payload: TranscriptPayload, downloadToken: string) {
+// You'll need to implement this based on your storage solution
+async function getAccessToken(accountId: string): Promise<string | null> {
+  // TODO: Retrieve the access token for this account from your storage
+  console.log('Getting access token for account:', accountId);
+  return null; // Replace with actual token retrieval
+}
+
+export async function handleTranscriptCompleted(payload: TranscriptPayload) {
   try {
     const { object } = payload;
     
@@ -36,8 +43,16 @@ export async function handleTranscriptCompleted(payload: TranscriptPayload, down
     console.log('Received transcript webhook:', {
       meetingId: object.id,
       topic: object.topic,
+      accountId: object.account_id,
       recordingFiles: object.recording_files.length
     });
+
+    // Get the OAuth token for this account
+    const accessToken = await getAccessToken(object.account_id);
+    if (!accessToken) {
+      console.error('No access token found for account:', object.account_id);
+      throw new Error('Account not authorized');
+    }
     
     // Find the transcript file
     const transcriptFile = object.recording_files.find(
@@ -56,15 +71,15 @@ export async function handleTranscriptCompleted(payload: TranscriptPayload, down
       fileSize: transcriptFile.file_size
     });
 
-    // Construct the download URL with the token
-    const downloadUrl = `${transcriptFile.download_url}?access_token=${downloadToken}`;
+    // Construct the download URL
+    const downloadUrl = transcriptFile.download_url;
 
-    // Download the transcript
+    // Download the transcript using OAuth token
     console.log('Attempting to download transcript...');
     const response = await fetch(downloadUrl, {
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${downloadToken}`
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
       }
     });
 
