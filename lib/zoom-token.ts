@@ -6,13 +6,6 @@ interface ZoomTokens {
   expires_in: number;
 }
 
-interface ZoomUser {
-  zoom_user_id: string;
-  email: string;
-  access_token: string;
-  refresh_token: string;
-  token_expires_at: Date;
-}
 
 export async function storeZoomTokens(tokens: ZoomTokens, zoomUserId: string, email: string) {
   const expiresAt = new Date();
