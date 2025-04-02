@@ -1,21 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { handleMeetingEnded } from './handlers/meeting-ended';
+import { handleTranscriptCompleted } from './handlers/recording-transcript';
 
 // Types for Zoom webhook payloads
 interface ZoomWebhookPayload {
   event: string;
   payload: {
-    object: {
+    plainToken?: string;
+    object?: {
       id: string;
+      uuid: string;
       host_id: string;
+      account_id: string;
       topic: string;
       type: number;
       start_time: string;
-      duration: number;
       timezone: string;
+      host_email: string;
+      duration: number;
+      recording_count?: number;
+      recording_files?: Array<{
+        id: string;
+        meeting_id: string;
+        recording_start: string;
+        recording_end: string;
+        file_type: string;
+        file_size: number;
+        play_url: string;
+        download_url: string;
+        status: string;
+        recording_type: string;
+      }>;
     };
   };
+  download_token?: string;
 }
+
+// Set timeout for webhook validation (Zoom requires response within 3 seconds)
+export const maxDuration = 3;
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,6 +46,12 @@ export async function POST(req: NextRequest) {
     
     // Handle Zoom's webhook verification challenge
     if (body.event === 'endpoint.url_validation') {
+      // Validate payload structure
+      if (!body.payload?.plainToken) {
+        console.error('Invalid validation payload structure');
+        return NextResponse.json({ error: 'Invalid payload' }, { status: 400 });
+      }
+
       const plainToken = body.payload.plainToken;
       const secret = process.env.ZOOM_WEBHOOK_SECRET_TOKEN;
       
@@ -31,32 +60,56 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Server configuration error' }, { status: 500 });
       }
 
-      const hashForValidation = crypto
-        .createHmac('sha256', secret)
-        .update(plainToken)
-        .digest('hex');
+      try {
+        const hashForValidation = crypto
+          .createHmac('sha256', secret)
+          .update(plainToken)
+          .digest('hex');
 
-      return NextResponse.json({
-        plainToken: body.payload.plainToken,
-        encryptedToken: hashForValidation,
-      });
+        return NextResponse.json({
+          plainToken: plainToken,
+          encryptedToken: hashForValidation,
+        });
+      } catch (cryptoError) {
+        console.error('Crypto operation failed:', cryptoError);
+        return NextResponse.json({ error: 'Validation failed' }, { status: 500 });
+      }
     }
 
     // Handle actual webhook events
     const payload = body as ZoomWebhookPayload;
 
-    // For now, just log the event
-    console.log('Received Zoom webhook:', payload.event);
-    
-    // You can add specific handling for meeting.ended event here
-    if (payload.event === 'meeting.ended') {
-      // Handle meeting end event
-      console.log('Meeting ended:', payload.payload.object);
+    // Validate webhook payload structure
+    if (!payload.event || !payload.payload) {
+      return NextResponse.json({ error: 'Invalid webhook payload' }, { status: 400 });
+    }
+
+    // Handle different event types
+    switch (payload.event) {
+      case 'meeting.ended':
+        if (!payload.payload.object) {
+          return NextResponse.json({ error: 'Invalid meeting.ended payload' }, { status: 400 });
+        }
+        await handleMeetingEnded({ object: payload.payload.object });
+        break;
+
+      case 'recording.transcript_completed':
+        if (!payload.payload.object || !payload.download_token) {
+          return NextResponse.json({ error: 'Invalid transcript payload or missing download token' }, { status: 400 });
+        }
+        await handleTranscriptCompleted({ object: payload.payload.object }, payload.download_token);
+        break;
+        
+      default:
+        console.log('Unhandled event type:', payload.event);
     }
 
     return NextResponse.json({ status: 'success' });
   } catch (error) {
     console.error('Error processing webhook:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal server error',
+      details: error instanceof Error ? error.message : 'Unknown error'
+    }, { status: 500 });
   }
 }
