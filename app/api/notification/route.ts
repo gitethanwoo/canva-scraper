@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { handleMeetingEnded } from './handlers/meeting-ended';
 import { handleTranscriptCompleted } from './handlers/recording-transcript';
 
 // Types for Zoom webhook payloads
@@ -86,18 +85,16 @@ export async function POST(req: NextRequest) {
 
     // Handle different event types
     switch (payload.event) {
-      case 'meeting.ended':
-        if (!payload.payload.object) {
-          return NextResponse.json({ error: 'Invalid meeting.ended payload' }, { status: 400 });
-        }
-        await handleMeetingEnded({ object: payload.payload.object });
-        break;
-
       case 'recording.transcript_completed':
-        if (!payload.payload.object || !payload.download_token) {
-          return NextResponse.json({ error: 'Invalid transcript payload or missing download token' }, { status: 400 });
+        if (!payload.payload.object || !payload.download_token || !payload.payload.object.recording_files) {
+          return NextResponse.json({ error: 'Invalid transcript payload, missing download token, or missing recording files' }, { status: 400 });
         }
-        await handleTranscriptCompleted({ object: payload.payload.object }, payload.download_token);
+        await handleTranscriptCompleted({ 
+          object: {
+            ...payload.payload.object,
+            recording_files: payload.payload.object.recording_files
+          }
+        }, payload.download_token);
         break;
         
       default:
