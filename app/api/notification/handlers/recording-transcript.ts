@@ -1,3 +1,5 @@
+import { WebClient } from '@slack/web-api';
+
 interface TranscriptFile {
   id: string;
   meeting_id: string;
@@ -28,11 +30,37 @@ interface TranscriptPayload {
   };
 }
 
-// You'll need to implement this based on your storage solution
-async function getAccessToken(accountId: string): Promise<string | null> {
-  // TODO: Retrieve the access token for this account from your storage
-  console.log('Getting access token for account:', accountId);
-  return null; // Replace with actual token retrieval
+// Initialize Slack client
+const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
+
+async function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function downloadTranscriptWithRetry(downloadUrl: string, maxRetries = 3): Promise<string> {
+  let lastError;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const response = await fetch(downloadUrl);
+
+      if (response.ok) {
+        return await response.text();
+      }
+
+      // If we get an unauthorized error or any other error, wait and retry
+      const waitTime = Math.pow(2, attempt) * 1000; // Exponential backoff: 1s, 2s, 4s
+      console.log(`Attempt ${attempt + 1} failed, waiting ${waitTime}ms before retry...`);
+      await delay(waitTime);
+      continue;
+    } catch (error) {
+      lastError = error;
+      const waitTime = Math.pow(2, attempt) * 1000;
+      console.log(`Attempt ${attempt + 1} failed, waiting ${waitTime}ms before retry...`);
+      await delay(waitTime);
+    }
+  }
+
+  throw lastError || new Error('Failed to download transcript after all retries');
 }
 
 export async function handleTranscriptCompleted(payload: TranscriptPayload) {
@@ -43,16 +71,9 @@ export async function handleTranscriptCompleted(payload: TranscriptPayload) {
     console.log('Received transcript webhook:', {
       meetingId: object.id,
       topic: object.topic,
-      accountId: object.account_id,
+      hostEmail: object.host_email,
       recordingFiles: object.recording_files.length
     });
-
-    // Get the OAuth token for this account
-    const accessToken = await getAccessToken(object.account_id);
-    if (!accessToken) {
-      console.error('No access token found for account:', object.account_id);
-      throw new Error('Account not authorized');
-    }
     
     // Find the transcript file
     const transcriptFile = object.recording_files.find(
@@ -71,28 +92,36 @@ export async function handleTranscriptCompleted(payload: TranscriptPayload) {
       fileSize: transcriptFile.file_size
     });
 
-    // Construct the download URL
-    const downloadUrl = transcriptFile.download_url;
-
-    // Download the transcript using OAuth token
+    // Download the transcript with retry logic
     console.log('Attempting to download transcript...');
-    const response = await fetch(downloadUrl, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to download transcript: ${response.statusText}`);
-    }
-
-    const transcript = await response.text();
+    const transcript = await downloadTranscriptWithRetry(transcriptFile.download_url);
     
-    // Log the transcript content
-    console.log('\n=== Transcript Content ===\n');
-    console.log(transcript);
-    console.log('\n=== End Transcript ===\n');
+    // For testing: only send to ethan@servant.io
+    if (object.host_email !== 'ethan@servant.io') {
+      console.log('Skipping Slack message - not test user:', object.host_email);
+      return;
+    }
+    
+    // Look up user in Slack by email
+    try {
+      const slackResponse = await slack.users.lookupByEmail({
+        email: object.host_email
+      });
+      
+      if (slackResponse.ok && slackResponse.user && slackResponse.user.id) {
+        // Send DM to user
+        await slack.chat.postMessage({
+          channel: slackResponse.user.id,
+          text: `Your meeting transcript for "${object.topic || 'Untitled Meeting'}" is ready!\n\n${transcript}`
+        });
+        
+        console.log('Successfully sent transcript to user:', object.host_email);
+      } else {
+        console.error('Could not find Slack user for email:', object.host_email);
+      }
+    } catch (error) {
+      console.error('Error sending Slack message:', error);
+    }
     
   } catch (error) {
     console.error('Error handling transcript completed event:', error);
